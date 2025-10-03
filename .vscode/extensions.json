@@ -1,0 +1,20 @@
+{
+  "recommendations": [
+    // Protobuf 支援
+    "zxh404.vscode-proto3",
+    
+    // Go 開發
+    "golang.go",
+    
+    // Docker 支援
+    "ms-azuretools.vscode-docker",
+    
+    // YAML 支援（docker-compose）
+    "redhat.vscode-yaml",
+    
+    // 其他實用工具
+    "esbenp.prettier-vscode",
+    "eamodio.gitlens"
+  ]
+}
+
