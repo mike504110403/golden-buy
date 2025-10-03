@@ -1,0 +1,30 @@
+services:
+  # Price Service
+  price-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: price-service
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - INFLUXDB_URL=http://golden-buy-influxdb:8086
+      - INFLUXDB_TOKEN=my-super-secret-auth-token
+      - INFLUXDB_ORG=golden-buy
+      - INFLUXDB_BUCKET=golden_buy
+      - REDIS_ADDR=golden-buy-redis:6379
+      - LOG_LEVEL=info
+    networks:
+      - golden-buy-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  golden-buy-network:
+    external: true
+    name: infrastructure_golden-buy-network

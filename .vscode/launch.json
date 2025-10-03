@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Price Service",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/price",
+      "env": {
+        "INFLUXDB_URL": "http://localhost:8086",
+        "INFLUXDB_TOKEN": "my-super-secret-auth-token",
+        "INFLUXDB_ORG": "golden-buy",
+        "INFLUXDB_BUCKET": "golden_buy",
+        "REDIS_ADDR": "localhost:6379",
+        "GRPC_PORT": "50051",
+        "LOG_LEVEL": "debug"
+      },
+      "args": [],
+      "showLog": true,
+      "console": "integratedTerminal"
+    }
+  ]
+}
+
