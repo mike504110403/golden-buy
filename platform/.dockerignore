@@ -1,0 +1,40 @@
+# 二進制文件
+platform
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 測試文件
+*_test.go
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系統文件
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 文檔
+README.md
+*.md
+
+# 臨時文件
+*.log
+*.tmp
+tmp/
+

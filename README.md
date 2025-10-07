@@ -24,8 +24,8 @@ Service Service Service
 ### 微服務職責
 
 - **Price Service** ✅: 價格模擬 → InfluxDB 存儲 → Redis Pub/Sub → gRPC API
-- **Platform Gateway** 🔄: HTTP API + WebSocket + User 整合 + gRPC 客戶端
-- **Order Service** 🔄: 訂單創建/撮合/查詢
+- **Platform Gateway** 🔄: gRPC 客戶端 + Redis 訂閱（已完成）→ HTTP API + WebSocket（待開發）
+- **Order Service** 📋: 訂單創建/撮合/查詢（未開始）
 
 ## 核心決策
 
@@ -118,17 +118,34 @@ golden-buy/
 ## 快速開始
 
 ```bash
-# 1. 啟動基礎設施
+# 1. 啟動基礎設施（Redis、InfluxDB、PostgreSQL、Grafana）
 cd infrastructure
 docker-compose up -d
 
-# 2. 開發 Price Service
+# 2. 啟動 Price Service
 cd ../price
-go mod download
-# 按 F5 啟動調試
+go run .
+# 或使用 Docker: docker-compose up -d
 
-# 3. 測試 gRPC
+# 3. 啟動 Platform Service
+cd ../platform
+go run .
+
+# 4. 測試
+# - 觀察終端輸出，應該看到：
+#   ✅ K 線查詢成功
+#   💰 每秒選擇最佳/最差價格
+#   📊 價格更新推送
+```
+
+### 測試 gRPC（可選）
+
+```bash
+# 測試 Price Service
 grpcurl -plaintext -d '{"symbol":"GOLD"}' localhost:50051 price.PriceService/GetCurrentPrice
+
+# 測試 K 線查詢
+grpcurl -plaintext -d '{"symbol":"GOLD","interval":"1m","limit":10}' localhost:50051 price.PriceService/GetKlines
 ```
 
 ## Platform Gateway 規劃
@@ -152,7 +169,7 @@ grpcurl -plaintext -d '{"symbol":"GOLD"}' localhost:50051 price.PriceService/Get
 GET  /api/prices/current     # 獲取當前價格
 GET  /api/prices/history     # 獲取歷史 K 線資料
 WS   /ws/prices              # WebSocket 價格推送
-GET  /api/user/info          # 用戶資訊 (Demo)
+GET  /api/user/info          # 用戶資訊 (Demo)  
 ```
 
 ## 開發進度
@@ -161,20 +178,44 @@ GET  /api/user/info          # 用戶資訊 (Demo)
 - [x] **Price Service** (✅ 已完成)
   - [x] 專案結構與配置
   - [x] Proto 定義
-  - [x] 價格模擬器
-  - [x] Redis Pub/Sub
-  - [x] InfluxDB 整合
-  - [x] gRPC 服務
+  - [x] 價格模擬器（幾何布朗運動）
+  - [x] Redis Pub/Sub（每秒推送 3 次）
+  - [x] InfluxDB 整合（存儲價格和 K 線）
+  - [x] gRPC 服務（查詢、訂閱、K 線）
   - [x] Docker 容器化
-- [ ] **Platform Gateway** (🔄 規劃中)
-  - [ ] gRPC 客戶端連接 Price Service
+  - [x] K 線查詢修復（Flux 語法 OHLC 聚合）
+- [x] **Platform Gateway - Phase 1** (✅ 已完成並測試)
+  - [x] 專案結構與配置
+  - [x] Proto 定義（gRPC 客戶端）
+  - [x] gRPC 客戶端連接 Price Service
+    - [x] GetCurrentPrice - 單個商品價格
+    - [x] GetCurrentPrices - 批量查詢
+    - [x] GetKlines - 歷史 K 線資料 ✅ 測試成功
+  - [x] Redis 訂閱器整合
+    - [x] 訂閱 `price:updates` 頻道
+    - [x] 價格緩衝（每秒收集 3 筆）
+    - [x] 策略選擇（best/worst）
+    - [x] 每秒推送 1 筆處理後的價格
+  - [x] 數據模型（Price、Kline、PriceBuffer）
+  - [x] 主服務邏輯整合
+  - [x] Docker 容器化
+  - [x] 測試驗證
+- [ ] **Platform Gateway - Phase 2** (📋 待開發)
   - [ ] HTTP API 服務器
-  - [ ] WebSocket 價格推送
-  - [ ] Redis 訂閱整合
-  - [ ] 用戶管理整合
+    - [ ] GET /api/prices/current
+    - [ ] GET /api/prices/history
+    - [ ] GET /api/user/info (Demo)
+  - [ ] WebSocket 服務器
+    - [ ] WS /ws/prices - 即時推送
+  - [ ] 用戶管理整合（簡化版）
 - [ ] Order Service
 - [ ] 前端應用
 
 ---
 
-**當前任務**: 開發 Platform Gateway (整合 User + API Gateway)
+**當前狀態**: Platform Gateway Phase 1 完成並測試通過
+- ✅ gRPC 連接正常
+- ✅ Redis 訂閱運作正常
+- ✅ K 線查詢返回正確的 OHLC 數據
+- ✅ 價格策略（best/worst）運作正常
+- 📋 下一步：開發 HTTP API + WebSocket 推送
