@@ -1,0 +1,32 @@
+# 二進制文件
+platform
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 測試文件
+*.test
+*.out
+coverage.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系統文件
+.DS_Store
+Thumbs.db
+
+# 臨時文件
+*.log
+*.tmp
+tmp/
+
+# 環境變數
+.env
+.env.local
+

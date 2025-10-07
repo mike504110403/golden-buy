@@ -1,0 +1,187 @@
+services:
+  # ==================== 基礎設施 ====================
+  
+  # Redis - 快取和 Pub/Sub
+  redis:
+    image: redis:7-alpine
+    container_name: golden-buy-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - golden-buy-network
+    restart: unless-stopped
+
+  # InfluxDB - 時序資料庫
+  influxdb:
+    image: influxdb:2.7
+    container_name: golden-buy-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin123456
+      - DOCKER_INFLUXDB_INIT_ORG=golden-buy
+      - DOCKER_INFLUXDB_INIT_BUCKET=golden_buy
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - golden-buy-network
+    restart: unless-stopped
+
+  # PostgreSQL - 關聯式資料庫
+  postgres:
+    image: postgres:16-alpine
+    container_name: golden-buy-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=golden_buy
+      - POSTGRES_PASSWORD=golden_buy_password
+      - POSTGRES_DB=golden_buy
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U golden_buy"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - golden-buy-network
+    restart: unless-stopped
+
+  # Grafana - 資料視覺化
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: golden-buy-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    networks:
+      - golden-buy-network
+    restart: unless-stopped
+
+  # ==================== 微服務 ====================
+
+  # Price Service - 價格服務
+  price-service:
+    build:
+      context: ./price
+      dockerfile: Dockerfile
+    container_name: golden-buy-price-service
+    ports:
+      - "50051:50051"
+    environment:
+      - GRPC_PORT=50051
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=my-super-secret-auth-token
+      - INFLUXDB_ORG=golden-buy
+      - INFLUXDB_BUCKET=golden_buy
+      - REDIS_ADDR=redis:6379
+      - LOG_LEVEL=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - golden-buy-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Platform Service - 平台閘道服務
+  platform-service:
+    build:
+      context: ./platform
+      dockerfile: Dockerfile
+    container_name: golden-buy-platform-service
+    ports:
+      - "8080:8080"
+    environment:
+      # gRPC 客戶端配置
+      - PRICE_SERVICE_ADDR=price-service:50051
+      - GRPC_TIMEOUT=10s
+      # Redis 配置
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+      # 價格策略：best (最佳價格) 或 worst (最差價格)
+      - PRICE_STRATEGY=best
+      # HTTP 配置
+      - HTTP_PORT=8080
+      # 日誌配置
+      - LOG_LEVEL=info
+    depends_on:
+      redis:
+        condition: service_healthy
+      price-service:
+        condition: service_healthy
+    networks:
+      - golden-buy-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  web-service:
+    build:
+      context: ./web
+    container_name: golden-buy-web-service
+    ports:
+      - "5173:3000"
+    environment:
+      - VITE_API_BASE_URL=http://platform-service:8080
+      - VITE_WS_BASE_URL=ws://platform-service:8080
+    depends_on:
+      platform-service:
+        condition: service_healthy
+    networks:
+      - golden-buy-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  influxdb-data:
+  postgres-data:
+  grafana-data:
+
+networks:
+  golden-buy-network:
+    driver: bridge
+

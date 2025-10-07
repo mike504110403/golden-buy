@@ -1,0 +1,40 @@
+version: '3.9'
+
+services:
+  platform-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: golden-buy-platform
+    restart: unless-stopped
+    environment:
+      # gRPC 客戶端配置
+      PRICE_SERVICE_ADDR: price-service:50051
+      GRPC_TIMEOUT: 10s
+
+      # Redis 配置
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+
+      # 價格策略：best (最佳價格) 或 worst (最差價格)
+      PRICE_STRATEGY: best
+
+      # HTTP 配置（未來使用）
+      HTTP_PORT: 8080
+
+      # 日誌配置
+      LOG_LEVEL: info
+    ports:
+      - "8080:8080" # HTTP API 端口（未來使用）
+    networks:
+      - golden-buy-network
+    depends_on:
+      - redis
+    # 等待依賴服務就緒
+    # restart: on-failure
+
+networks:
+  golden-buy-network:
+    external: true
+

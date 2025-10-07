@@ -19,14 +19,16 @@ const (
 	Interval1m  Interval = "1m"
 	Interval5m  Interval = "5m"
 	Interval15m Interval = "15m"
+	Interval30m Interval = "30m"
 	Interval1h  Interval = "1h"
+	Interval4h  Interval = "4h"
 	Interval1d  Interval = "1d"
 )
 
 // IsValidInterval 驗證時間週期是否有效
 func IsValidInterval(interval string) bool {
 	switch Interval(interval) {
-	case Interval1m, Interval5m, Interval15m, Interval1h, Interval1d:
+	case Interval1m, Interval5m, Interval15m, Interval30m, Interval1h, Interval4h, Interval1d:
 		return true
 	default:
 		return false

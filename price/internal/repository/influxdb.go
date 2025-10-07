@@ -109,16 +109,37 @@ func (r *InfluxDBRepository) GetKlines(ctx context.Context, symbol model.Symbol,
 	start := time.UnixMilli(startTime).Format(time.RFC3339)
 	end := time.UnixMilli(endTime).Format(time.RFC3339)
 
-	// Flux 查詢語句 - 使用 aggregateWindow 聚合
+	// 轉換時間間隔為 Flux 格式
+	fluxInterval := convertIntervalToFlux(interval)
+
+	// Flux 查詢語句 - 分別計算 OHLC
 	query := fmt.Sprintf(`
-		from(bucket: "%s")
-		|> range(start: %s, stop: %s)
-		|> filter(fn: (r) => r["_measurement"] == "prices")
-		|> filter(fn: (r) => r["symbol"] == "%s")
-		|> filter(fn: (r) => r["_field"] == "price")
-		|> aggregateWindow(every: %s, fn: aggregate, createEmpty: false)
-		|> limit(n: %d)
-	`, r.bucket, start, end, string(symbol), interval, limit)
+		data = from(bucket: "%s")
+			|> range(start: %s, stop: %s)
+			|> filter(fn: (r) => r["_measurement"] == "prices")
+			|> filter(fn: (r) => r["symbol"] == "%s")
+			|> filter(fn: (r) => r["_field"] == "price")
+
+		open = data
+			|> aggregateWindow(every: %s, fn: first, createEmpty: false)
+			|> set(key: "_field", value: "open")
+
+		high = data
+			|> aggregateWindow(every: %s, fn: max, createEmpty: false)
+			|> set(key: "_field", value: "high")
+
+		low = data
+			|> aggregateWindow(every: %s, fn: min, createEmpty: false)
+			|> set(key: "_field", value: "low")
+
+		close = data
+			|> aggregateWindow(every: %s, fn: last, createEmpty: false)
+			|> set(key: "_field", value: "close")
+
+		union(tables: [open, high, low, close])
+			|> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+			|> limit(n: %d)
+	`, r.bucket, start, end, string(symbol), fluxInterval, fluxInterval, fluxInterval, fluxInterval, limit)
 
 	// 執行查詢
 	result, err := r.queryAPI.Query(ctx, query)
@@ -129,17 +150,62 @@ func (r *InfluxDBRepository) GetKlines(ctx context.Context, symbol model.Symbol,
 	var klines []*model.Kline
 	for result.Next() {
 		record := result.Record()
-		if record.Table() == 0 {
-			kline := &model.Kline{
-				Timestamp: record.Time(),
-				Close:     record.Value().(float64),
-				Volume:    0, // 模擬器暫時不生成成交量
-			}
-			klines = append(klines, kline)
+		values := record.Values()
+
+		// 從 pivot 後的 record 中提取 OHLC 值
+		kline := &model.Kline{
+			Timestamp: record.Time(),
+			Open:      getFloat64Value(values, "open"),
+			High:      getFloat64Value(values, "high"),
+			Low:       getFloat64Value(values, "low"),
+			Close:     getFloat64Value(values, "close"),
+			Volume:    0, // 模擬器暫時不生成成交量
 		}
+		klines = append(klines, kline)
+	}
+
+	if result.Err() != nil {
+		return nil, fmt.Errorf("讀取查詢結果失敗: %v", result.Err())
 	}
 
 	return klines, nil
+}
+
+// convertIntervalToFlux 將時間間隔轉換為 Flux 格式
+func convertIntervalToFlux(interval string) string {
+	switch interval {
+	case "1m":
+		return "1m"
+	case "5m":
+		return "5m"
+	case "15m":
+		return "15m"
+	case "30m":
+		return "30m"
+	case "1h":
+		return "1h"
+	case "4h":
+		return "4h"
+	case "1d":
+		return "1d"
+	default:
+		return "1m" // 預設 1 分鐘
+	}
+}
+
+// getFloat64Value 從 map 中安全提取 float64 值
+func getFloat64Value(values map[string]interface{}, key string) float64 {
+	if val, ok := values[key]; ok {
+		switch v := val.(type) {
+		case float64:
+			return v
+		case int64:
+			return float64(v)
+		case int:
+			return float64(v)
+		}
+	}
+	return 0
 }
 
 // Close 關閉連接
