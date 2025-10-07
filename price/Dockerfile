@@ -29,8 +29,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o price .
 # 使用輕量級的 Alpine 映像作為運行階段
 FROM alpine:3.18
 
-# 安裝 ca-certificates 用於 HTTPS 請求
-RUN apk --no-cache add ca-certificates
+# 安裝 ca-certificates 和 tzdata（時區數據）
+RUN apk --no-cache add ca-certificates tzdata
+
+# 設置時區
+ENV TZ=Asia/Taipei
 
 # 創建非 root 用戶
 RUN addgroup -g 1001 -S appgroup && \

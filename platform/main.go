@@ -15,6 +15,15 @@ import (
 )
 
 func main() {
+	// 設置時區為 UTC+8 (Asia/Taipei)
+	loc, err := time.LoadLocation("Asia/Taipei")
+	if err != nil {
+		log.Printf("⚠️  載入時區失敗，使用預設時區: %v", err)
+	} else {
+		time.Local = loc
+		log.Printf("✅ 時區設置為: %s", loc.String())
+	}
+
 	// 設置日誌格式
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 

@@ -16,6 +16,14 @@ RUN pnpm install --frozen-lockfile
 # 複製源代碼
 COPY . .
 
+# 接收構建參數
+ARG VITE_API_BASE_URL=http://localhost:8080
+ARG VITE_WS_BASE_URL=ws://localhost:8080
+
+# 設置環境變量供構建使用
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_WS_BASE_URL=$VITE_WS_BASE_URL
+
 # 構建應用
 RUN pnpm build
 

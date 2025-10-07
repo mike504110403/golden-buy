@@ -1,4 +1,13 @@
 import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
+
+// 啟用 UTC 和 timezone 插件
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
+// 設置預設時區為 UTC+8 (Asia/Taipei)
+dayjs.tz.setDefault('Asia/Taipei')
 
 // 格式化價格
 export const formatPrice = (price: number, decimals: number = 2): string => {
@@ -19,9 +28,9 @@ export const formatPercent = (value: number, decimals: number = 2): string => {
   return `${sign}${value.toFixed(decimals)}%`
 }
 
-// 格式化時間
+// 格式化時間（使用 UTC+8 時區）
 export const formatTime = (timestamp: number, format: string = 'YYYY-MM-DD HH:mm:ss'): string => {
-  return dayjs(timestamp).format(format)
+  return dayjs(timestamp).tz('Asia/Taipei').format(format)
 }
 
 // 格式化相對時間
