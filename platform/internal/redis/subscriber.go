@@ -80,7 +80,27 @@ func (s *Subscriber) Start(handler PriceHandler) error {
 
 	// 啟動定時處理器（每秒處理一次緩衝區）
 	s.wg.Add(1)
+	log.Printf("🚀 Starting processBuffers goroutine")
 	go s.processBuffers(handler)
+
+	// 立即執行一次處理，確保定時器工作
+	log.Printf("⏰ Immediate flush buffers")
+	s.flushBuffers(handler)
+
+	// 強制啟動定時器
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			case <-ticker.C:
+				log.Printf("⏰ Force timer tick - flushing buffers")
+				s.flushBuffers(handler)
+			}
+		}
+	}()
 
 	// 接收訊息
 	ch := pubsub.Channel()
@@ -147,6 +167,7 @@ func (s *Subscriber) processBuffers(handler PriceHandler) {
 			return
 
 		case <-s.ticker.C:
+			log.Printf("⏰ Timer tick - flushing buffers")
 			s.flushBuffers(handler)
 		}
 	}
@@ -184,7 +205,9 @@ func (s *Subscriber) flushBuffers(handler PriceHandler) {
 						symbol, s.cfg.PriceStrategy, selectedPrice.Price, len(buffer.Prices))
 
 					// 調用處理器
+					log.Printf("🔄 Calling handler for %s", symbol)
 					handler(selectedPrice)
+					log.Printf("✅ Handler called for %s", symbol)
 				}
 			}
 
@@ -246,4 +269,3 @@ func (s *Subscriber) Stop() error {
 func (s *Subscriber) Ping(ctx context.Context) error {
 	return s.client.Ping(ctx).Err()
 }
-

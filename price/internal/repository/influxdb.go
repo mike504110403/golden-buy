@@ -109,6 +109,9 @@ func (r *InfluxDBRepository) GetKlines(ctx context.Context, symbol model.Symbol,
 	start := time.UnixMilli(startTime).Format(time.RFC3339)
 	end := time.UnixMilli(endTime).Format(time.RFC3339)
 
+	// 轉換時間間隔為 Flux 格式
+	fluxInterval := convertIntervalToFlux(interval)
+
 	// Flux 查詢語句 - 分別計算 OHLC
 	query := fmt.Sprintf(`
 		data = from(bucket: "%s")
@@ -136,7 +139,7 @@ func (r *InfluxDBRepository) GetKlines(ctx context.Context, symbol model.Symbol,
 		union(tables: [open, high, low, close])
 			|> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 			|> limit(n: %d)
-	`, r.bucket, start, end, string(symbol), interval, interval, interval, interval, limit)
+	`, r.bucket, start, end, string(symbol), fluxInterval, fluxInterval, fluxInterval, fluxInterval, limit)
 
 	// 執行查詢
 	result, err := r.queryAPI.Query(ctx, query)
@@ -166,6 +169,28 @@ func (r *InfluxDBRepository) GetKlines(ctx context.Context, symbol model.Symbol,
 	}
 
 	return klines, nil
+}
+
+// convertIntervalToFlux 將時間間隔轉換為 Flux 格式
+func convertIntervalToFlux(interval string) string {
+	switch interval {
+	case "1m":
+		return "1m"
+	case "5m":
+		return "5m"
+	case "15m":
+		return "15m"
+	case "30m":
+		return "30m"
+	case "1h":
+		return "1h"
+	case "4h":
+		return "4h"
+	case "1d":
+		return "1d"
+	default:
+		return "1m" // 預設 1 分鐘
+	}
 }
 
 // getFloat64Value 從 map 中安全提取 float64 值

@@ -217,18 +217,166 @@ docker-compose logs -f  # 查看日誌
 3. **符合業務需求**: 訂單系統需要「這一秒內的最佳/最差價」
 4. **節省頻寬**: WebSocket 推送頻率降低到原來的 1/3
 
-## 未來開發
+## Phase 2 完成 ✅
 
-- [ ] HTTP API 服務器
-  - `GET /api/prices/current` - 獲取當前價格
+- [x] **HTTP API 服務器**（使用 Gin 框架）
+  - `GET /health` - 健康檢查
+  - `GET /api/prices/current` - 獲取當前價格（單個或全部商品）
   - `GET /api/prices/history` - 獲取 K 線資料
   - `GET /api/user/info` - 用戶資訊（Demo）
-- [ ] WebSocket 服務器
+- [x] **WebSocket 服務器**
   - `WS /ws/prices` - 即時價格推送
-- [ ] 用戶管理整合（簡化版）
-- [ ] 健康檢查端點
+  - 支援訂閱/取消訂閱特定商品
+  - 自動心跳檢測（Ping/Pong）
+- [x] **用戶管理整合**（簡化版）
+  - Demo 用戶系統
+  - 餘額管理
+
+### API 詳細說明
+
+#### HTTP API
+
+##### 1. 健康檢查
+```bash
+GET /health
+
+# 回應範例
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "service": "platform-gateway",
+    "timestamp": 1234567890
+  }
+}
+```
+
+##### 2. 獲取當前價格
+```bash
+# 獲取所有商品價格
+GET /api/prices/current
+
+# 獲取特定商品價格
+GET /api/prices/current?symbol=GOLD
+
+# 回應範例
+{
+  "success": true,
+  "data": {
+    "GOLD": {
+      "symbol": "GOLD",
+      "price": 1850.23,
+      "change_percent": 0.15,
+      "timestamp": 1234567890000,
+      "updated_at": "2025-10-07T10:30:00Z"
+    }
+  }
+}
+```
+
+##### 3. 獲取歷史 K 線資料
+```bash
+GET /api/prices/history?symbol=GOLD&interval=1m&limit=100
+
+# 參數說明
+# - symbol: 商品代碼（必需）
+# - interval: K 線間隔（預設 1m，支援：1m, 5m, 15m, 30m, 1h, 4h, 1d）
+# - start: 開始時間戳（毫秒，可選）
+# - end: 結束時間戳（毫秒，可選）
+# - limit: 返回筆數（預設 100）
+
+# 回應範例
+{
+  "success": true,
+  "data": {
+    "symbol": "GOLD",
+    "interval": "1m",
+    "count": 10,
+    "klines": [
+      {
+        "timestamp": 1234567890000,
+        "open": 1850.00,
+        "high": 1851.50,
+        "low": 1849.80,
+        "close": 1850.23,
+        "volume": 0
+      }
+    ]
+  }
+}
+```
+
+##### 4. 獲取用戶資訊
+```bash
+GET /api/user/info
+
+# 回應範例
+{
+  "success": true,
+  "data": {
+    "id": "demo-user-001",
+    "username": "demo_user",
+    "email": "demo@golden-buy.com",
+    "balance": 10000.00,
+    "role": "demo"
+  }
+}
+```
+
+#### WebSocket API
+
+##### 連接
+```javascript
+const ws = new WebSocket('ws://localhost:8080/ws/prices');
+```
+
+##### 訂閱商品
+```javascript
+// 訂閱單個商品
+ws.send(JSON.stringify({
+  type: 'subscribe',
+  symbol: 'GOLD'
+}));
+
+// 訂閱多個商品
+ws.send(JSON.stringify({
+  type: 'subscribe',
+  symbols: ['GOLD', 'SILVER', 'PLATINUM', 'PALLADIUM']
+}));
+```
+
+##### 取消訂閱
+```javascript
+ws.send(JSON.stringify({
+  type: 'unsubscribe',
+  symbol: 'GOLD'
+}));
+```
+
+##### 接收價格更新
+```javascript
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data);
+  
+  if (message.type === 'price_update') {
+    console.log('Price update:', message.data);
+    // {
+    //   symbol: 'GOLD',
+    //   price: 1850.23,
+    //   change_percent: 0.15,
+    //   timestamp: 1234567890000
+    // }
+  }
+};
+```
+
+## 未來開發
+
+- [ ] 優雅關閉 HTTP 服務器（context）
 - [ ] Prometheus 監控指標
 - [ ] 測試覆蓋
+- [ ] API 速率限制
+- [ ] JWT 認證
 
 ## 故障排除
 

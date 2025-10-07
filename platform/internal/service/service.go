@@ -10,6 +10,8 @@ import (
 	"github.com/mike/golden-buy/platform/internal/grpc"
 	"github.com/mike/golden-buy/platform/internal/model"
 	"github.com/mike/golden-buy/platform/internal/redis"
+	"github.com/mike/golden-buy/platform/internal/user"
+	"github.com/mike/golden-buy/platform/internal/websocket"
 )
 
 // PlatformService 平台服務
@@ -17,6 +19,8 @@ type PlatformService struct {
 	cfg          *config.Config
 	grpcClient   *grpc.PriceClient
 	subscriber   *redis.Subscriber
+	wsHub        *websocket.Hub
+	userManager  *user.Manager
 	mu           sync.RWMutex
 	latestPrices map[string]*model.Price // 存儲每個商品的最新處理價格
 	ctx          context.Context
@@ -56,10 +60,18 @@ func New(cfg *config.Config) (*PlatformService, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// 創建 WebSocket Hub
+	wsHub := websocket.NewHub()
+
+	// 創建用戶管理器
+	userManager := user.NewManager()
+
 	return &PlatformService{
 		cfg:          cfg,
 		grpcClient:   grpcClient,
 		subscriber:   subscriber,
+		wsHub:        wsHub,
+		userManager:  userManager,
 		latestPrices: make(map[string]*model.Price),
 		ctx:          ctx,
 		cancel:       cancel,
@@ -69,6 +81,14 @@ func New(cfg *config.Config) (*PlatformService, error) {
 // Start 啟動服務
 func (s *PlatformService) Start() error {
 	log.Println("🚀 Starting Platform Service...")
+
+	// 啟動 WebSocket Hub
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.wsHub.Run()
+	}()
+	log.Println("✅ WebSocket Hub started")
 
 	// 啟動 Redis 訂閱器
 	s.wg.Add(1)
@@ -87,13 +107,16 @@ func (s *PlatformService) Start() error {
 
 // handlePriceUpdate 處理價格更新（來自 Redis 訂閱器）
 func (s *PlatformService) handlePriceUpdate(price *model.Price) {
+	log.Printf("🔄 handlePriceUpdate called: %s = %.2f", price.Symbol, price.Price)
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// 存儲最新價格
 	s.latestPrices[price.Symbol] = price
+	s.mu.Unlock()
 
-	// 未來在這裡可以推送到 WebSocket 客戶端
+	// 推送到 WebSocket 客戶端
+	log.Printf("📡 Calling BroadcastPrice for %s", price.Symbol)
+	s.wsHub.BroadcastPrice(price)
+
 	log.Printf("📊 Latest price updated: %s = %.2f (change: %.2f%%)",
 		price.Symbol, price.Price, price.ChangePercent)
 }
@@ -176,4 +199,14 @@ func (s *PlatformService) Stop() error {
 // GetSubscriber 獲取 Redis 訂閱器（用於調試）
 func (s *PlatformService) GetSubscriber() *redis.Subscriber {
 	return s.subscriber
+}
+
+// GetWebSocketHub 獲取 WebSocket Hub
+func (s *PlatformService) GetWebSocketHub() *websocket.Hub {
+	return s.wsHub
+}
+
+// GetUserManager 獲取用戶管理器
+func (s *PlatformService) GetUserManager() *user.Manager {
+	return s.userManager
 }

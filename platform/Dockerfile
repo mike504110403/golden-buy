@@ -4,6 +4,9 @@ FROM golang:1.23-alpine AS builder
 # 安裝必要工具
 RUN apk add --no-cache git
 
+# 設置環境變數允許自動下載所需的 Go 版本
+ENV GOTOOLCHAIN=auto
+
 # 設置工作目錄
 WORKDIR /app
 

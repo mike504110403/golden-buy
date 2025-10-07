@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mike/golden-buy/platform/internal/config"
+	httpserver "github.com/mike/golden-buy/platform/internal/http"
 	"github.com/mike/golden-buy/platform/internal/service"
 )
 
@@ -42,6 +43,18 @@ func main() {
 		log.Fatalf("❌ Failed to start service: %v", err)
 	}
 
+	// 創建 HTTP 服務器
+	httpAddr := fmt.Sprintf(":%s", cfg.HTTPPort)
+	wsHub := svc.GetWebSocketHub()
+	httpServer := httpserver.NewServer(httpAddr, svc, wsHub)
+
+	// 啟動 HTTP 服務器
+	go func() {
+		if err := httpServer.Start(); err != nil {
+			log.Fatalf("❌ Failed to start HTTP server: %v", err)
+		}
+	}()
+
 	// 測試：獲取 K 線資料
 	go testKlines(svc)
 
@@ -53,6 +66,10 @@ func main() {
 	log.Println("\n🔄 Received shutdown signal...")
 
 	// 優雅關閉
+	if err := httpServer.Stop(); err != nil {
+		log.Printf("❌ Error stopping HTTP server: %v", err)
+	}
+
 	if err := svc.Stop(); err != nil {
 		log.Printf("❌ Error during shutdown: %v", err)
 		os.Exit(1)
